@@ -109,6 +109,7 @@ class CANTProtocol{
         static CANTProtocol* ref;
 
         //Chat-assisted code begins here
+        //TODO: Claude is this still true? The description doesn't line up quite well
         /*
             Basically, in order to have one function to call, but multiple different implementations (one including a template) in the same array,
             you have to have a base struct, and then structs that derive from that base struct.
@@ -138,6 +139,8 @@ class CANTProtocol{
         /*
             TODO: recomment
         */
+
+        //TODO: global variable / preprocessor for queue length
         PendingCANFrame pendingFrames[16];
         int frameQueueFront = 0;
         int frameQueueLength = 0;

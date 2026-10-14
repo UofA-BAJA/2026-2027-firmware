@@ -61,6 +61,8 @@ bool CANTProtocol::begin(){
 
     //ESP32 and Arduino have two slightly different implemenetations of attachInterrupt()
     //Also ESP32 needs its task defined 
+
+    //TODO: remove the whole handler thing for esp32
     #if defined(CANT_ARDUINO)
         attachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN), ISRHandler, LOW);
     #elif defined(CANT_ESP32)
@@ -113,86 +115,76 @@ void CANTProtocol::execute(){
         Serial.println("Execute loop");
     #endif
 
-    //TODO: refactor this into the right thing
-    while(CAN.readMsgBuf(&rxId, &len, rxBuf) != CAN_NOMSG){
-        // #if DEBUG_CAN
-        //  Serial.println("ISR");
-        // #endif 
-        
-        //If the length of the queue is 16 frames or greater (max size), drop it. 
-        if(frameQueueLength > 15) {
+    //If the interrupt flagged commands being available
+    if(dataAvailable){
+        dataAvailable = false; //Reset flag
+
+        //While there is still stuff in the recieve buffer
+        while(CAN.readMsgBuf(&rxId, &len, rxBuf) != CAN_NOMSG){
             #if DEBUG_CAN
-                Serial.println("WARNING: Frame queue overload. Reduce frequency");
-            #else
-            break;
+                Serial.println("ISR");
+            #endif 
+            
+            //If the length of the queue is 16 frames or greater (max size), drop it. 
+            if(frameQueueLength > 15) {
+                #if DEBUG_CAN
+                    Serial.println("WARNING: Frame queue overload. Reduce frequency");
+                #endif
+
+                break;
+            }
+            
+            //Insert at the right place in the queue
+            int insertLocation = frameQueueFront + frameQueueLength;
+            //If we're trying to insert at an index off the end of the array, wraparound to the front
+            if(insertLocation > 15) insertLocation = insertLocation - 16;
+            
+            //Populate the frame (the object is always there, just overwrite it)
+            memcpy(pendingFrames[insertLocation].data, rxBuf, len);
+            pendingFrames[insertLocation].dataLength = len;
+            pendingFrames[insertLocation].callbackID = (rxId & 0x000FFFFF);
+            pendingFrames[insertLocation].dataID = ((rxId & 0x00F00000) >> 20); 
+            
+            frameQueueLength++;
         }
-        
-        int insertLocation = frameQueueFront + frameQueueLength;
-        //If we're trying to insert at an index off the end of the array, wraparound to the front
-        if(insertLocation > 15) insertLocation = insertLocation - 16;
-        
 
-        memcpy(pendingFrames[insertLocation].data, rxBuf, len);
-        pendingFrames[insertLocation].dataLength = len;
-        pendingFrames[insertLocation].callbackID = (rxId & 0x000FFFFF);
-        pendingFrames[insertLocation].dataID = ((rxId & 0x00F00000) >> 20); 
-        
-        frameQueueLength++;
+        //Re-enable interrupts on arduino
+        //TODO: is this necessary?
+        #if defined(CANT_ARDUINO)
+            interrupts();
+        #endif
     }
-
 
     //Sort all the incoming CAN frames into their respective queues 
-    //TODO: Delete lol
+    //TODO: delete
     while(frameQueueLength > 0){
-        #if DEBUG_CAN
-            Serial.print("Clearing stuff out of queue at pos: ");
-            Serial.println(frameQueueFront);
-        #endif
-        volatile PendingCANFrame* incoming = &pendingFrames[frameQueueFront];
-        if(registeredMessages[incoming->dataID].exists){
-            if(registeredMessages[incoming->dataID].isRequest){
-                //If the length of the queue is 32 frames or greater (max size), drop it. 
-                if(requestQueueLength > 31) break;
-
-                int insertLocation = requestQueueFront + requestQueueLength;
-                //If we're trying to insert at an index off the end of the array, wraparound to the front
-                if(insertLocation > 31) insertLocation = insertLocation - 32;
-
-                //Copy stuff into the queue object
-                memcpy(pendingRequests[insertLocation].data, (const void*)(incoming->data), incoming->dataLength);
-                pendingRequests[insertLocation].dataLength = incoming->dataLength;
-                pendingRequests[insertLocation].callbackID = incoming->callbackID;
-                pendingRequests[insertLocation].dataID = incoming->dataID;
-                requestQueueLength++;
-            }else{
-                //If the length of the queue is 32 frames or greater (max size), drop it. 
-                if(commandQueueLength > 31) break;
-
-                int insertLocation = commandQueueFront + commandQueueLength;
-                //If we're trying to insert at an index off the end of the array, wraparound to the front
-                if(insertLocation > 31) insertLocation = insertLocation - 32;
-
-                //Copy stuff into the queue object
-                memcpy(pendingCommands[insertLocation].data, (const void*)(incoming->data), incoming->dataLength);
-                pendingCommands[insertLocation].dataLength = incoming->dataLength;
-                pendingCommands[insertLocation].callbackID = incoming->callbackID;
-                pendingCommands[insertLocation].dataID = incoming->dataID;
-                commandQueueLength++;
-            }
-        }
-        if(frameQueueFront == 31) frameQueueFront = 0;
-        else frameQueueFront++;
-        frameQueueLength--;
+        
+       
         
     }
 
 
-    for 
-    if(registeredMessages[incoming->dataID].exists){
-        if(registeredMessages[incoming->dataID].isRequest){
+    //If there is something to be responded to, do it.
+    //Only do one at a time so that there's time to go back and check for new commands
+    if(frameQueueLength > 0){
+        //
+        if(registeredMessages[incoming->dataID].exists){
+            if(registeredMessages[incoming->dataID].isRequest){
+                
+            }else{
+
+            }
+        }else{
 
         }
+
+        //This goes somewhere
+        if(frameQueueFront == 31) frameQueueFront = 0;
+        else frameQueueFront++;
+        frameQueueLength--; 
+        //end of that code block
     }
+    
     //TODO: Only one queue, just execute one at a time so that 
     //we have time to go back and recieve more.
 
