@@ -110,9 +110,39 @@ bool CANTProtocol::registerCommand(byte commandID, void (*onRecieved) (unsigned 
 //Call in the loop() function to execute pending CAN requests and commands
 void CANTProtocol::execute(){
     #if DEBUG_CAN
-        // Serial.println("L");
+        Serial.println("Execute loop");
     #endif
+
+    //TODO: refactor this into the right thing
+    while(CAN.readMsgBuf(&rxId, &len, rxBuf) != CAN_NOMSG){
+        // #if DEBUG_CAN
+        //  Serial.println("ISR");
+        // #endif 
+        
+        //If the length of the queue is 16 frames or greater (max size), drop it. 
+        if(frameQueueLength > 15) {
+            #if DEBUG_CAN
+                Serial.println("WARNING: Frame queue overload. Reduce frequency");
+            #else
+            break;
+        }
+        
+        int insertLocation = frameQueueFront + frameQueueLength;
+        //If we're trying to insert at an index off the end of the array, wraparound to the front
+        if(insertLocation > 15) insertLocation = insertLocation - 16;
+        
+
+        memcpy(pendingFrames[insertLocation].data, rxBuf, len);
+        pendingFrames[insertLocation].dataLength = len;
+        pendingFrames[insertLocation].callbackID = (rxId & 0x000FFFFF);
+        pendingFrames[insertLocation].dataID = ((rxId & 0x00F00000) >> 20); 
+        
+        frameQueueLength++;
+    }
+
+
     //Sort all the incoming CAN frames into their respective queues 
+    //TODO: Delete lol
     while(frameQueueLength > 0){
         #if DEBUG_CAN
             Serial.print("Clearing stuff out of queue at pos: ");
@@ -157,8 +187,16 @@ void CANTProtocol::execute(){
     }
 
 
+    for 
+    if(registeredMessages[incoming->dataID].exists){
+        if(registeredMessages[incoming->dataID].isRequest){
+
+        }
+    }
+    //TODO: Only one queue, just execute one at a time so that 
+    //we have time to go back and recieve more.
+
     //Execute up to 2 pending requests
-    
     for(int i = 0; i < 2; i++){
         if(requestQueueLength > 0){
             #if DEBUG_CAN
@@ -283,36 +321,11 @@ void CANTProtocol::InterruptSubroutine(){
     #if defined(CANT_ARDUINO)
         noInterrupts();
     #endif
-    
-    long unsigned int rxId = 0;
-    unsigned char len = 0;
-    unsigned char rxBuf[8];
-    
-    //Interrupt goes low and stays low until all buffers are empty
-    while(CAN.readMsgBuf(&rxId, &len, rxBuf) != CAN_NOMSG){
-        // #if DEBUG_CAN
-        //  Serial.println("ISR");
-        // #endif 
-        
-        //If the length of the queue is 32 frames or greater (max size), drop it. 
-        if(frameQueueLength > 31) break;
-        
-        int insertLocation = frameQueueFront + frameQueueLength;
-        //If we're trying to insert at an index off the end of the array, wraparound to the front
-        if(insertLocation > 31) insertLocation = insertLocation - 32;
-        
-        //memcpy doesn't like to copy into volatile, use a loop instead
-        for(int i = 0; i < len; i++){
-            pendingFrames[insertLocation].data[i] = rxBuf[i];
-        }
-        pendingFrames[insertLocation].dataLength = len;
-        pendingFrames[insertLocation].callbackID = (rxId & 0x000FFFFF);
-        pendingFrames[insertLocation].dataID = ((rxId & 0x00F00000) >> 20); 
-        
-        frameQueueLength++;
-    }
-    #if defined(CANT_ARDUINO)
-    interrupts();
-    #endif
+
+    dataAvailable = true;
+
+    // #if defined(CANT_ARDUINO)
+    // interrupts();
+    // #endif
     
 }
