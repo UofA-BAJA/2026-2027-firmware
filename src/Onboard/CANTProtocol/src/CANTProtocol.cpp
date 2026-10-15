@@ -173,21 +173,21 @@ void CANTProtocol::execute(){
         //Wrap around if at end
         if(frameQueueFront == QUEUE_LENGTH - 1) frameQueueFront = 0;
         else frameQueueFront++;
-        frameQueueFront--;
+        frameQueueLength--;
 
         //TODO: should this be in the recieve block
         if(registeredMessages[incoming->dataID].exists){
             RegisteredBase canMessage = registeredMessages[incoming->dataID];
             if(canMessage.isRequest){
                 #if DEBUG_CAN
-                    Serial.println("running request.onRecieved()");
+                    Serial.println("running request.onRecieved() for id: " + incoming->dataID);
                 #endif
 
                 //Run onRecieved / builder method 
                 canMessage.onRecieved(incoming->dataLength, incoming->data, incoming->callbackID);
             }else{
                 #if DEBUG_CAN
-                    Serial.println("running command.onRecieved()");
+                    Serial.println("running command.onRecieved() for id: " + incoming -> dataID);
                 #endif
                 
                 //Run onRecieved / builder method

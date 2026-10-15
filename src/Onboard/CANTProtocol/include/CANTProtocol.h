@@ -1,7 +1,7 @@
 #ifndef CANTPROTOCOL_H
 #define CANTPROTOCOL_H
-// 1 = normal logging, 2 = logs loop state as well
-#define DEBUG_CAN 1
+// 1 = normal logging, 2 = logs most verbose info
+// #define DEBUG_CAN 1
 
 #define QUEUE_LENGTH 16
 
@@ -42,13 +42,13 @@ class CANTProtocol{
         */
         template <typename T>
         void sendRequestResponse(T data, unsigned long callbackID){
-            #if DEBUG_CAN
+            #if DEBUG_CAN == 2
                 Serial.println("inside sendRequestResponse()");
             #endif
 
             //If there's actually a callback to send to...
             if(callbackID > 0){
-                #if DEBUG_CAN
+                #if DEBUG_CAN == 2
                     Serial.print("actually sending response. size: ");
                     Serial.println(sizeof(T));
                 #endif
@@ -80,7 +80,7 @@ class CANTProtocol{
                     }
                     //Otherwise, copy 8 bytes
                     else {
-                        #if DEBUG_CAN
+                        #if DEBUG_CAN == 2
                             Serial.print("now sending callback id: ");
                             Serial.println(callbackID + j);
                         #endif
@@ -113,7 +113,7 @@ class CANTProtocol{
 
         //Flag for "there is data" so you don't need to do an expensive read
         //to check every loop
-        volatile bool dataAvailable;
+        volatile bool dataAvailable = false;
         
         //ISRs are static, but we need a specific reference to a CANTProtocol object
         //This does sadly prevent more than 1 can chip right now
