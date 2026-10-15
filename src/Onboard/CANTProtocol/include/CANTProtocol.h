@@ -1,6 +1,9 @@
 #ifndef CANTPROTOCOL_H
 #define CANTPROTOCOL_H
-// #define DEBUG_CAN 1
+// 1 = normal logging, 2 = logs loop state as well
+#define DEBUG_CAN 1
+
+#define QUEUE_LENGTH 16
 
 #include <mcp_can.h>
 #include <Arduino.h>
@@ -14,7 +17,7 @@ class CANTProtocol{
             @param interrupt the interrupt pin. For arduinos, this is later wrapped in digitalPinToInterrupt()
             @param deviceID the 5 bit ID of the device. 
         */
-        CANTProtocol(int cs, int interrupt, unsigned long deviceID) : CAN_CS_PIN(cs), CAN_INTERRUPT_PIN(interrupt), CAN_DEVICE_ID(deviceID), CAN(cs){
+        CANTProtocol(int cs, int interrupt, unsigned long deviceID) : CAN(cs), CAN_INTERRUPT_PIN(interrupt), CAN_DEVICE_ID(deviceID){
             //Set reference object to itself
             CANTProtocol::ref = this;
         }
@@ -31,8 +34,12 @@ class CANTProtocol{
         //TODO: move this into a new file
         //Why is it in the header file? https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
 
-        //Call this method with your built data at the end of a CAN *Request* onRecieved method.
-        //Do NOT call this method for CAN commands (what would the data be anyway?)
+        /**
+         * Call this method with your built data at the end of a CAN *Request* onRecieved method.
+         * Do NOT call this method for CAN commands (what would the data be anyway?)
+         * @param data Your data, can be anything that isn't null
+         * @param callbackID The callback ID passed to the builder, UNMODIFIED
+        */
         template <typename T>
         void sendRequestResponse(T data, unsigned long callbackID){
             #if DEBUG_CAN
@@ -96,9 +103,13 @@ class CANTProtocol{
         MCP_CAN CAN;
 
     private:
-        const int CAN_CS_PIN;
         const int CAN_INTERRUPT_PIN; 
         const unsigned long CAN_DEVICE_ID;
+
+        //Variables used for can reading
+        long unsigned int canRXId = 0;
+        unsigned char canRXlength = 0;
+        unsigned char canRXBuf[8];
 
         //Flag for "there is data" so you don't need to do an expensive read
         //to check every loop
@@ -141,7 +152,7 @@ class CANTProtocol{
         */
 
         //TODO: global variable / preprocessor for queue length
-        PendingCANFrame pendingFrames[16];
+        PendingCANFrame pendingFrames[QUEUE_LENGTH];
         int frameQueueFront = 0;
         int frameQueueLength = 0;
 };
