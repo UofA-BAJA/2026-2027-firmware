@@ -180,14 +180,15 @@ void CANTProtocol::execute(){
             RegisteredBase canMessage = registeredMessages[incoming->dataID];
             if(canMessage.isRequest){
                 #if DEBUG_CAN
-                    Serial.println("running request.onRecieved() for id: " + incoming->dataID);
+                    // Serial.print("request.onRecieved() id: ");
+                    // Serial.println(incoming->dataID);
                 #endif
 
                 //Run onRecieved / builder method 
                 canMessage.onRecieved(incoming->dataLength, incoming->data, incoming->callbackID);
             }else{
                 #if DEBUG_CAN
-                    Serial.println("running command.onRecieved() for id: " + incoming -> dataID);
+                    // Serial.println("running command.onRecieved() for id: " + incoming -> dataID);
                 #endif
                 
                 //Run onRecieved / builder method

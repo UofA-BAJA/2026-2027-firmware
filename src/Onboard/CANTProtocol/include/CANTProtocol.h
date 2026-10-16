@@ -1,9 +1,9 @@
 #ifndef CANTPROTOCOL_H
 #define CANTPROTOCOL_H
 // 1 = normal logging, 2 = logs most verbose info
-// #define DEBUG_CAN 1
+#define DEBUG_CAN 1
 
-#define QUEUE_LENGTH 16
+#define QUEUE_LENGTH 32
 
 #include <mcp_can.h>
 #include <Arduino.h>
@@ -43,13 +43,13 @@ class CANTProtocol{
         template <typename T>
         void sendRequestResponse(T data, unsigned long callbackID){
             #if DEBUG_CAN == 2
-                Serial.println("inside sendRequestResponse()");
+                // Serial.println("inside sendRequestResponse()");
             #endif
 
             //If there's actually a callback to send to...
             if(callbackID > 0){
                 #if DEBUG_CAN == 2
-                    Serial.print("actually sending response. size: ");
+                    // Serial.print("actually sending response. size: ");
                     Serial.println(sizeof(T));
                 #endif
                 byte outputBuffer[8];
@@ -66,7 +66,7 @@ class CANTProtocol{
                     //(this could be one line but I was having trouble thinking of the right way to do it)
                     //If this is the last frame, memcpy the right amount
                     if(j == numFrames - 1){
-                        #if DEBUG_CAN
+                        #if DEBUG_CAN == 2
                             Serial.print("now sending end frame callback id: ");
                             Serial.println(callbackID + j);
                         #endif
@@ -81,7 +81,7 @@ class CANTProtocol{
                     //Otherwise, copy 8 bytes
                     else {
                         #if DEBUG_CAN == 2
-                            Serial.print("now sending callback id: ");
+                            // Serial.print("now sending callback id: ");
                             Serial.println(callbackID + j);
                         #endif
                         memcpy(&outputBuffer, ptr + (j * 8), 8);
