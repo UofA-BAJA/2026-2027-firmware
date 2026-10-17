@@ -64,7 +64,7 @@ bool CANTProtocol::begin(){
 
     //TODO: remove the whole handler thing for esp32
     #if defined(CANT_ARDUINO)
-        attachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN), ISRHandler, LOW);
+        attachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN), ISRHandler, FALLING);
     #elif defined(CANT_ESP32)
         attachInterrupt(CAN_INTERRUPT_PIN, ISRHandler, FALLING);
         // TaskHandle_t handle;
@@ -130,7 +130,7 @@ void CANTProtocol::execute(){
     #endif
 
     //If the interrupt flagged commands being available
-    if(dataAvailable){
+    if(dataAvailable == true){
         dataAvailable = false; //Reset flag
 
         //While there is still stuff in the recieve buffer
@@ -157,23 +157,12 @@ void CANTProtocol::execute(){
             
             frameQueueLength++;
         }
-
-        //Re-enable interrupts on arduino
-        //TODO: is this necessary?
-        #if defined(CANT_ARDUINO)
-            interrupts();
-        #endif
     }
 
     //If there is something to be responded to, do it.
     //Only do one at a time so that there's time to go back and check for new commands
     if(frameQueueLength > 0){
         PendingCANFrame* incoming = &pendingFrames[frameQueueFront];
-
-        //Wrap around if at end
-        if(frameQueueFront == QUEUE_LENGTH - 1) frameQueueFront = 0;
-        else frameQueueFront++;
-        frameQueueLength--;
 
         //TODO: should this be in the recieve block
         if(registeredMessages[incoming->dataID].exists){
@@ -213,6 +202,12 @@ void CANTProtocol::execute(){
             Serial.println("Recieved a message that isn't registered. Guh?");
         }
         #endif
+
+        //Wrap around if at end
+        if(frameQueueFront == QUEUE_LENGTH - 1) frameQueueFront = 0;
+        else frameQueueFront++;
+        frameQueueLength--;
+
     }
 }
 
@@ -288,16 +283,7 @@ void IRAM_ATTR CANTProtocol::InterruptSubroutine(){
 #else
 void CANTProtocol::InterruptSubroutine(){
 #endif
-    
-    //We want to disable interrupts on arduino as arduinos can mess up if an interrupt comes in while in an ISR
-    //We can't do this on an ESP32 as this messes up the RTOS
-    //TODO: Is this needed 
-    #if defined(CANT_ARDUINO)
-        noInterrupts();
-    #endif
 
+    //Tell the main loop that data is available
     dataAvailable = true;
-
-    //don't re-enable until we've parsed all data in execute()
-    
 }

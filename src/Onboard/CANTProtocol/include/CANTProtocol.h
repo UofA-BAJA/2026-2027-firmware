@@ -1,9 +1,9 @@
 #ifndef CANTPROTOCOL_H
 #define CANTPROTOCOL_H
 // 1 = normal logging, 2 = logs most verbose info
-#define DEBUG_CAN 1
+// #define DEBUG_CAN 1
 
-#define QUEUE_LENGTH 32
+#define QUEUE_LENGTH 16
 
 #include <mcp_can.h>
 #include <Arduino.h>
@@ -72,6 +72,7 @@ class CANTProtocol{
                         #endif
                         memcpy(&outputBuffer, ptr + (j * 8), sizeof(T) - (j * 8));
                         byte sendMSG = CAN.sendMsgBuf(callbackID + j, 1, sizeof(T) - (j * 8), outputBuffer);
+                        
                         #if DEBUG_CAN
                             if(sendMSG == CAN_GETTXBFTIMEOUT) Serial.println("Get TX Buffer Timeout");
                             else if(sendMSG == CAN_SENDMSGTIMEOUT) Serial.println("Send Message Timeout");
@@ -156,10 +157,6 @@ class CANTProtocol{
         int frameQueueFront = 0;
         int frameQueueLength = 0;
 };
-
-
-
-
 
 
 #endif
