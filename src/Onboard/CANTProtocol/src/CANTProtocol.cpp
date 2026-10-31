@@ -12,8 +12,8 @@ CANTProtocol* CANTProtocol::ref = nullptr;
 //Declare this up here so it can be used
 #if defined(CANT_ESP32)
 // #include "esp_task_wdt.h"
-TaskHandle_t canTaskHandle = NULL;
-void ESP32ISRTrampoline(void* ref);
+// TaskHandle_t canTaskHandle = NULL;
+// void ESP32ISRTrampoline(void* ref);
 // volatile bool interruptRecieved = false;
 #endif
 
@@ -68,13 +68,13 @@ bool CANTProtocol::begin(){
     #elif defined(CANT_ESP32)
         attachInterrupt(CAN_INTERRUPT_PIN, ISRHandler, FALLING);
         // TaskHandle_t handle;
-        xTaskCreate(
-            ESP32ISRTrampoline,
-            "Interrupt Handler",
-            1024, 
-            (void*)ref,
-            3,
-            &canTaskHandle);
+        // xTaskCreate(
+        //     ESP32ISRTrampoline,
+        //     "Interrupt Handler",
+        //     1024, 
+        //     (void*)ref,
+        //     3,
+        //     &canTaskHandle);
         // esp_task_wdt_delete(handle);
     #endif
 
@@ -226,56 +226,21 @@ bool CANTProtocol::end(){
 }
 
 /*
-An essay about the next 3 functions
 ISRs have to be static functions (i.e. not tied to an instance of CANTProtocol).
-Also, this ISR is not super quick (which is not ideal, but we need it to take high priority).
 
-For arduinos, we can just call the non-static version directly in the ISRHandler() function.
+Wejust call the non-static version directly in the ISRHandler() function.
 
-ESP32s are a bit more complex because they have a whole Real Time Operating System (RTOS) that can distribute tasks, 
-and it has hardware watchdogs that prevent the ISR from taking too long. 
-To get around this, we can create a task for the RTOS that runs in a tight loop that does nothing (ESP32ISRTrampoline).
-Then, when the interrupt is recieved, we simply notify the task, which resumes it, and calls the actual ISR handler.
-This works really well, and prevents the ISR from taking too long.
-
-Therefore, there are two different versions of the ISRHandler() function.
-
-IRAM_ATTR is a flag for ESP32 functions that tells the RTOS to keep it in RAM so access is faster. Critical for ISRs
+IRAM_ATTR is a flag for ESP32 functions that tells the RTOS to keep it in RAM so access is faster. 
+Since this is critical, we have to 
 */
 
-//TODO: is this really needed?
-
 #if defined(CANT_ESP32)
-void ESP32ISRTrampoline(void* ref){
-    CANTProtocol* newRef = (CANTProtocol*)ref;
-    for(;;){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        newRef->InterruptSubroutine();
-    }
-    
-}
-
-// //The actual thing called when the interrupt comes in
-void IRAM_ATTR CANTProtocol::ISRHandler(){
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    vTaskNotifyGiveFromISR(canTaskHandle, &xHigherPriorityTaskWoken);
-
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR();
-    }
-}
-
+void IRAM_ATTR CANTProtocol::ISRHandler(){ 
 #else
 void CANTProtocol::ISRHandler(){ 
+#endif
     ref->InterruptSubroutine();  
 }
-
-#endif
-
-
-
-
 
 //DON'T CALL THIS YOURSELF. THIS WILL MESS THINGS UP
 #if defined(CANT_ESP32)
