@@ -12,8 +12,8 @@ CANTProtocol* CANTProtocol::ref = nullptr;
 //Declare this up here so it can be used
 #if defined(CANT_ESP32)
 // #include "esp_task_wdt.h"
-TaskHandle_t canTaskHandle = NULL;
-void ESP32ISRTrampoline(void* ref);
+// TaskHandle_t canTaskHandle = NULL;
+// void ESP32ISRTrampoline(void* ref);
 // volatile bool interruptRecieved = false;
 #endif
 
@@ -27,7 +27,7 @@ void ESP32ISRTrampoline(void* ref);
 bool CANTProtocol::begin(){
 
     //Check for valid CAN ID
-    if(CAN_DEVICE_ID & ~(0b11111) > 0){
+    if((CAN_DEVICE_ID & ~(0b11111)) > 0){
         return false;
     }
 
@@ -61,28 +61,35 @@ bool CANTProtocol::begin(){
 
     //ESP32 and Arduino have two slightly different implemenetations of attachInterrupt()
     //Also ESP32 needs its task defined 
+
+    //TODO: remove the whole handler thing for esp32
     #if defined(CANT_ARDUINO)
-        attachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN), ISRHandler, LOW);
+        attachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN), ISRHandler, FALLING);
     #elif defined(CANT_ESP32)
         attachInterrupt(CAN_INTERRUPT_PIN, ISRHandler, FALLING);
         // TaskHandle_t handle;
-        xTaskCreate(
-            ESP32ISRTrampoline,
-            "Interrupt Handler",
-            1024, 
-            (void*)ref,
-            3,
-            &canTaskHandle);
+        // xTaskCreate(
+        //     ESP32ISRTrampoline,
+        //     "Interrupt Handler",
+        //     1024, 
+        //     (void*)ref,
+        //     3,
+        //     &canTaskHandle);
         // esp_task_wdt_delete(handle);
     #endif
 
     return true;
 }
 
-
+/**
+ * Registers a request for the CAN system to respond to.
+ * @param commandID The command ID from 0-15 to bind this request to
+ * @param onRecieved The function name for the builder that responds to this request.
+ * @returns true if successfully registered, false if an invalid ID is given. 
+ */
 bool CANTProtocol::registerRequest(byte commandID, void (*onRecieved) (unsigned char dataLength, byte* incomingData, unsigned long callbackID)){
     //Check for valid command ID
-    if(commandID & ~(0b1111) > 0){
+    if((commandID & ~(0b1111)) > 0){
         return false;
     }
     
@@ -93,9 +100,16 @@ bool CANTProtocol::registerRequest(byte commandID, void (*onRecieved) (unsigned 
     return true;
 }
 
+
+/**
+ * Registers a command (lossles/lossy, handled automatically) for the CAN system to respond to.
+ * @param commandID The command ID from 0-15 to bind this command to
+ * @param onRecieved The function name for the function that takes action on this command.
+ * @returns true if successfully registered, false if an invalid ID is given. 
+ */
 bool CANTProtocol::registerCommand(byte commandID, void (*onRecieved) (unsigned char dataLength, byte* incomingData, unsigned long callbackID)){
     //Check for valid command ID
-    if(commandID & ~(0b1111) > 0){
+    if((commandID & ~(0b1111)) > 0){
         return false;
     }
 
@@ -107,110 +121,100 @@ bool CANTProtocol::registerCommand(byte commandID, void (*onRecieved) (unsigned 
 }
 
 
-//Call in the loop() function to execute pending CAN requests and commands
+/**
+ * Call in the loop() function in the arduino code to run the CAN stuff.
+ */
 void CANTProtocol::execute(){
-    #if DEBUG_CAN
-        // Serial.println("L");
+    #if DEBUG_CAN == 2
+        Serial.println("Execute loop");
     #endif
-    //Sort all the incoming CAN frames into their respective queues 
-    while(frameQueueLength > 0){
-        #if DEBUG_CAN
-            Serial.print("Clearing stuff out of queue at pos: ");
-            Serial.println(frameQueueFront);
-        #endif
-        volatile PendingCANFrame* incoming = &pendingFrames[frameQueueFront];
-        if(registeredMessages[incoming->dataID].exists){
-            if(registeredMessages[incoming->dataID].isRequest){
-                //If the length of the queue is 32 frames or greater (max size), drop it. 
-                if(requestQueueLength > 31) break;
 
-                int insertLocation = requestQueueFront + requestQueueLength;
-                //If we're trying to insert at an index off the end of the array, wraparound to the front
-                if(insertLocation > 31) insertLocation = insertLocation - 32;
+    //If the interrupt flagged commands being available
+    if(dataAvailable == true){
+        dataAvailable = false; //Reset flag
 
-                //Copy stuff into the queue object
-                memcpy(pendingRequests[insertLocation].data, (const void*)(incoming->data), incoming->dataLength);
-                pendingRequests[insertLocation].dataLength = incoming->dataLength;
-                pendingRequests[insertLocation].callbackID = incoming->callbackID;
-                pendingRequests[insertLocation].dataID = incoming->dataID;
-                requestQueueLength++;
-            }else{
-                //If the length of the queue is 32 frames or greater (max size), drop it. 
-                if(commandQueueLength > 31) break;
-
-                int insertLocation = commandQueueFront + commandQueueLength;
-                //If we're trying to insert at an index off the end of the array, wraparound to the front
-                if(insertLocation > 31) insertLocation = insertLocation - 32;
-
-                //Copy stuff into the queue object
-                memcpy(pendingCommands[insertLocation].data, (const void*)(incoming->data), incoming->dataLength);
-                pendingCommands[insertLocation].dataLength = incoming->dataLength;
-                pendingCommands[insertLocation].callbackID = incoming->callbackID;
-                pendingCommands[insertLocation].dataID = incoming->dataID;
-                commandQueueLength++;
-            }
-        }
-        if(frameQueueFront == 31) frameQueueFront = 0;
-        else frameQueueFront++;
-        frameQueueLength--;
-        
-    }
-
-
-    //Execute up to 2 pending requests
-    
-    for(int i = 0; i < 2; i++){
-        if(requestQueueLength > 0){
-            #if DEBUG_CAN
-                Serial.println("Processing requests");
-            #endif
-            PendingCANFrame* r = &pendingRequests[requestQueueFront];
-            if(requestQueueFront == 31) requestQueueFront = 0;
-            else requestQueueFront++;
-            requestQueueLength--;
-
-            RegisteredBase request = registeredMessages[r->dataID];
-            if(request.exists){
-                //User's onRecieved method is expected to call sendRequestResponse() at the end
+        //While there is still stuff in the recieve buffer
+        while(CAN.readMsgBuf(&canRXId, &canRXlength, canRXBuf) != CAN_NOMSG){            
+            //If the length of the queue is 16 frames or greater (max size), drop it. 
+            if(frameQueueLength >= QUEUE_LENGTH) {
                 #if DEBUG_CAN
-                    Serial.println("running request.onRecieved()");
+                    Serial.println("WARNING: Frame queue overload. Reduce frequency");
                 #endif
-                request.onRecieved(r->dataLength, r->data, r->callbackID);
+
+                break;
             }
-             
+            
+            //Insert at the right place in the queue
+            int insertLocation = frameQueueFront + frameQueueLength;
+            //If we're trying to insert at an index off the end of the array, wraparound to the front
+            if(insertLocation > QUEUE_LENGTH - 1) insertLocation = insertLocation - QUEUE_LENGTH;
+            
+            //Populate the frame (the object is always there, just overwrite it)
+            memcpy(pendingFrames[insertLocation].data, canRXBuf, canRXlength);
+            pendingFrames[insertLocation].dataLength = canRXlength;
+            pendingFrames[insertLocation].callbackID = (canRXId & 0x000FFFFF);
+            pendingFrames[insertLocation].dataID = ((canRXId & 0x00F00000) >> 20); 
+            
+            frameQueueLength++;
         }
     }
 
-    //Execute up to 6 pending commands
-    for(int i = 0; i < 6; i++){
-        if(commandQueueLength > 0){
-            #if DEBUG_CAN
-                Serial.println("Processing commands");
-            #endif
-            PendingCANFrame* r = &pendingCommands[commandQueueFront];
-            if(commandQueueFront == 31) commandQueueFront = 0;
-            else commandQueueFront++;
-            commandQueueLength--;
-            
-            
-            RegisteredBase command = registeredMessages[r->dataID];
-            if(command.exists){
-                //The onRecieved method should *not* call sendRequestResponse()
-                command.onRecieved(r->dataLength, r->data, r->callbackID);
+    //If there is something to be responded to, do it.
+    //Only do one at a time so that there's time to go back and check for new commands
+    if(frameQueueLength > 0){
+        PendingCANFrame* incoming = &pendingFrames[frameQueueFront];
+
+        //TODO: should this be in the recieve block
+        if(registeredMessages[incoming->dataID].exists){
+            RegisteredBase canMessage = registeredMessages[incoming->dataID];
+            if(canMessage.isRequest){
+                #if DEBUG_CAN
+                    // Serial.print("request.onRecieved() id: ");
+                    // Serial.println(incoming->dataID);
+                #endif
+
+                //Run onRecieved / builder method 
+                canMessage.onRecieved(incoming->dataLength, incoming->data, incoming->callbackID);
+            }else{
+                #if DEBUG_CAN
+                    // Serial.println("running command.onRecieved() for id: " + incoming -> dataID);
+                #endif
+                
+                //Run onRecieved / builder method
+                //It should *not* call sendRequestResponse()
+                canMessage.onRecieved(incoming->dataLength, incoming->data, 0);
 
                 //If there is a callback, send ack bit. Otherwise do nothing
-                if(r->callbackID > 0){
+                if(incoming->callbackID > 0){
                     byte outputBuffer[8];
                     outputBuffer[0] = 0x43; //TODO: PROPERLY DEFINE THE ACK BIT
-                    byte sendMSG = CAN.sendMsgBuf(r->callbackID, 1, 1, outputBuffer);
-
+                    byte sendMSG = CAN.sendMsgBuf(incoming->callbackID, 1, 1, outputBuffer);
+                    #if DEBUG_CAN
+                        if(sendMSG == CAN_GETTXBFTIMEOUT) Serial.println("Get TX Buffer Timeout");
+                        else if(sendMSG == CAN_SENDMSGTIMEOUT) Serial.println("Send Message Timeout");
+                        else if(sendMSG != CAN_OK) Serial.println("Send message failed unknown");
+                    #endif
                 }
             }
         }
-    }
+        #if DEBUG_CAN
+        else{
+            Serial.println("Recieved a message that isn't registered. Guh?");
+        }
+        #endif
 
+        //Wrap around if at end
+        if(frameQueueFront == QUEUE_LENGTH - 1) frameQueueFront = 0;
+        else frameQueueFront++;
+        frameQueueLength--;
+
+    }
 }
 
+/**
+ * Turns off the interrupt and disables the CAN chip
+ * @return true. lol.
+ */
 bool CANTProtocol::end(){
     #if defined(CANT_ARDUINO)
         detachInterrupt(digitalPinToInterrupt(CAN_INTERRUPT_PIN));
@@ -222,54 +226,21 @@ bool CANTProtocol::end(){
 }
 
 /*
-An essay about the next 3 functions
 ISRs have to be static functions (i.e. not tied to an instance of CANTProtocol).
-Also, this ISR is not super quick (which is not ideal, but we need it to take high priority).
 
-For arduinos, we can just call the non-static version directly in the ISRHandler() function.
+Wejust call the non-static version directly in the ISRHandler() function.
 
-ESP32s are a bit more complex because they have a whole Real Time Operating System (RTOS) that can distribute tasks, 
-and it has hardware watchdogs that prevent the ISR from taking too long. 
-To get around this, we can create a task for the RTOS that runs in a tight loop that does nothing (ESP32ISRTrampoline).
-Then, when the interrupt is recieved, we simply notify the task, which resumes it, and calls the actual ISR handler.
-This works really well, and prevents the ISR from taking too long.
-
-Therefore, there are two different versions of the ISRHandler() function.
-
-IRAM_ATTR is a flag for ESP32 functions that tells the RTOS to keep it in RAM so access is faster. Critical for ISRs
+IRAM_ATTR is a flag for ESP32 functions that tells the RTOS to keep it in RAM so access is faster. 
+Since this is critical, we have to 
 */
 
 #if defined(CANT_ESP32)
-void ESP32ISRTrampoline(void* ref){
-    CANTProtocol* newRef = (CANTProtocol*)ref;
-    for(;;){
-        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        newRef->InterruptSubroutine();
-    }
-    
-}
-
-// //The actual thing called when the interrupt comes in
-void IRAM_ATTR CANTProtocol::ISRHandler(){
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-
-    vTaskNotifyGiveFromISR(canTaskHandle, &xHigherPriorityTaskWoken);
-
-    if (xHigherPriorityTaskWoken) {
-        portYIELD_FROM_ISR();
-    }
-}
-
+void IRAM_ATTR CANTProtocol::ISRHandler(){ 
 #else
 void CANTProtocol::ISRHandler(){ 
+#endif
     ref->InterruptSubroutine();  
 }
-
-#endif
-
-
-
-
 
 //DON'T CALL THIS YOURSELF. THIS WILL MESS THINGS UP
 #if defined(CANT_ESP32)
@@ -277,42 +248,7 @@ void IRAM_ATTR CANTProtocol::InterruptSubroutine(){
 #else
 void CANTProtocol::InterruptSubroutine(){
 #endif
-    
-    //We want to disable interrupts on arduino as arduinos can mess up if an interrupt comes in while in an ISR
-    //We can't do this on an ESP32 as this messes up the RTOS
-    #if defined(CANT_ARDUINO)
-        noInterrupts();
-    #endif
-    
-    long unsigned int rxId = 0;
-    unsigned char len = 0;
-    unsigned char rxBuf[8];
-    
-    //Interrupt goes low and stays low until all buffers are empty
-    while(CAN.readMsgBuf(&rxId, &len, rxBuf) != CAN_NOMSG){
-        // #if DEBUG_CAN
-        //  Serial.println("ISR");
-        // #endif 
-        
-        //If the length of the queue is 32 frames or greater (max size), drop it. 
-        if(frameQueueLength > 31) break;
-        
-        int insertLocation = frameQueueFront + frameQueueLength;
-        //If we're trying to insert at an index off the end of the array, wraparound to the front
-        if(insertLocation > 31) insertLocation = insertLocation - 32;
-        
-        //memcpy doesn't like to copy into volatile, use a loop instead
-        for(int i = 0; i < len; i++){
-            pendingFrames[insertLocation].data[i] = rxBuf[i];
-        }
-        pendingFrames[insertLocation].dataLength = len;
-        pendingFrames[insertLocation].callbackID = (rxId & 0x000FFFFF);
-        pendingFrames[insertLocation].dataID = ((rxId & 0x00F00000) >> 20); 
-        
-        frameQueueLength++;
-    }
-    #if defined(CANT_ARDUINO)
-    interrupts();
-    #endif
-    
+
+    //Tell the main loop that data is available
+    dataAvailable = true;
 }
