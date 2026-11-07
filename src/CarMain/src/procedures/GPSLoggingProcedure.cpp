@@ -50,7 +50,7 @@ namespace BajaWildcatRacing{
                     if(!carTimeSet){
                         uint64_t epoch = (uint64_t)gpsSubsystem.getUnixEpoch();
                         if(epoch > 0){
-                            
+                            CarTime::setUnixEpoch(epoch);
                             carTimeSet = true;
                         }
                     }
