@@ -20,7 +20,7 @@ namespace BajaWildcatRacing
 
     CREATE TABLE IF NOT EXISTS vehicle_info(
         name TEXT PRIMARY KEY,
-        competition_year INTEGER NOT NULL
+        competition_year INTEGER NOT NULL,
         competition_location TEXT NOT NULL
     );
 
@@ -118,7 +118,7 @@ namespace BajaWildcatRacing
     )SQL";
 
     inline const char* INSERT_BRAKE_PRESSURE = R"SQL(
-        INSERT INTO pressure (epoch_ms, front, rear)
+        INSERT INTO brake_pressure (epoch_ms, front, rear)
         VALUES (?, ?, ?);
     )SQL";
 
