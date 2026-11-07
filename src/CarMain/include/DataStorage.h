@@ -33,9 +33,6 @@ namespace BajaWildcatRacing
             DataStorage(const char* path);
             void end();
 
-            // lol idk why this function even exists
-            int getData();
-
             void insertCar(std::string name, int competitionYear);
             void insertSensor(std::string name, std::string manufacturer, std::string model, std::string sensorType, std::string description);
 
@@ -65,12 +62,6 @@ namespace BajaWildcatRacing
 
             void setupDatabase(const char* path);
             void updateDatabase();
-
-            void storeLinearActuator(const char* sensor, int sensor_len, float displacement);
-            void storeBrakePressure(const char* sensor, int sensor_len, float psi);
-            void storeTachometer(const char* sensor, int sensor_len, float rpm);
-
-
 
     };
 

@@ -18,17 +18,10 @@ namespace BajaWildcatRacing
     PRAGMA journal_mode = WAL;
     PRAGMA synchronous = NORMAL;
 
-    CREATE TABLE IF NOT EXISTS vehicle(
+    CREATE TABLE IF NOT EXISTS vehicle_info(
         name TEXT PRIMARY KEY,
         competition_year INTEGER NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS sensor(
-        name TEXT PRIMARY KEY,
-        manufacturer TEXT NOT NULL,
-        model TEXT NOT NULL,
-        sensor_type TEXT NOT NULL,
-        description TEXT
+        competition_location TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS log(
@@ -36,142 +29,122 @@ namespace BajaWildcatRacing
         epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
         vehicle TEXT NOT NULL,
         type TEXT NOT NULL,
-        message TEXT,
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE
+        message TEXT
     );
 
     CREATE TABLE IF NOT EXISTS imu(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
         ax REAL,
         ay REAL,
         az REAL,
         rx REAL,
         ry REAL,
         rz REAL,
-        a_unit TEXT GENERATED ALWAYS AS ('m/s^2') VIRTUAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+        a_unit TEXT GENERATED ALWAYS AS ('m/s^2') VIRTUAL
     );
 
     CREATE TABLE IF NOT EXISTS gps(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
         lat REAL,
         lon REAL,
         alt REAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+        alt_unit TEXT GENERATED ALWAYS AS ('ft') VIRTUAL
     );
 
-    CREATE TABLE IF NOT EXISTS pressure(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
-        psi REAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+    CREATE TABLE IF NOT EXISTS brake_pressure(
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
+        front REAL,
+        rear REAL,
+        pressure_unit TEXT GENERATED ALWAYS AS ('psi') VIRTUAL
     );
 
-    CREATE TABLE IF NOT EXISTS linear_actuator(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
-        displacement REAL,
-        displacement_unit TEXT GENERATED ALWAYS AS ('m') VIRTUAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+    CREATE TABLE IF NOT EXISTS shock_displacement(
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
+        front_left REAL,
+        front_right REAL,
+        rear_left REAL,
+        rear_right REAL,
+        displacement_unit TEXT GENERATED ALWAYS AS ('cm') VIRTUAL
     );
 
     CREATE TABLE IF NOT EXISTS temperature(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
-        temp REAL,
-        temp_unit TEXT GENERATED ALWAYS AS ('°C') VIRTUAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
+        cvt_temp REAL,
+        temp_unit TEXT GENERATED ALWAYS AS ('°C') VIRTUAL
     );
 
-    CREATE TABLE IF NOT EXISTS tachometer(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
-        sensor TEXT NOT NULL,
-        rpm REAL,
-        PRIMARY KEY (epoch_ms, vehicle, sensor),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE,
-        FOREIGN KEY(sensor) REFERENCES sensor(name) ON DELETE CASCADE
+    CREATE TABLE IF NOT EXISTS engine_tachometer(
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
+        rpm REAL
+    );
+
+    CREATE TABLE IF NOT EXISTS wheel_speed(
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
+        front_left REAL,
+        front_right REAL,
+        rear REAL,
+        speed_unit TEXT GENERATED ALWAYS AS ('rpm') VIRTUAL
     );
 
 
     CREATE TABLE IF NOT EXISTS vehicle_state(
-        epoch_ms INTEGER NOT NULL DEFAULT (unixepoch('now') * 1000),
-        vehicle TEXT NOT NULL,
+        epoch_ms INTEGER PRIMARY KEY NOT NULL DEFAULT (unixepoch('now') * 1000),
         speed REAL,
         dist REAL,
         speed_unit TEXT GENERATED ALWAYS AS ('m/s') VIRTUAL,
-        dist_unit TEXT GENERATED ALWAYS AS ('m') VIRTUAL,
-        PRIMARY KEY (epoch_ms, vehicle),
-        FOREIGN KEY(vehicle) REFERENCES vehicle(name) ON DELETE CASCADE
+        dist_unit TEXT GENERATED ALWAYS AS ('m') VIRTUAL
     );
     
     )SQL";
 
     inline const char* INSERT_VEHICLE = R"SQL(
-    INSERT INTO vehicle (name, competition_year)
-    VALUES (?, ?);
-    )SQL";
-
-    inline const char* INSERT_SENSOR = R"SQL(
-        INSERT INTO sensor (name, manufacturer, model, sensor_type, description)
-        VALUES (?, ?, ?, ?, ?);
+    INSERT INTO vehicle_info (name, competition_year, competition_location)
+    VALUES (?, ?, ?);
     )SQL";
 
     inline const char* INSERT_LOG = R"SQL(
-        INSERT INTO log (epoch_ms, vehicle, type, message)
-        VALUES (?, ?, ?, ?);
+        INSERT INTO log (epoch_ms, type, message)
+        VALUES (?, ?, ?);
     )SQL";
 
     inline const char* INSERT_IMU = R"SQL(
-        INSERT INTO imu (epoch_ms, vehicle, sensor, ax, ay, az, rx, ry, rz)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        INSERT INTO imu (epoch_ms, ax, ay, az, rx, ry, rz)
+        VALUES (?, ?, ?, ?, ?, ?, ?);
     )SQL";
 
     inline const char* INSERT_GPS = R"SQL(
-        INSERT INTO gps (epoch_ms, vehicle, sensor, lat, lon, alt)
-        VALUES (?, ?, ?, ?, ?, ?);
-    )SQL";
-
-    inline const char* INSERT_PRESSURE = R"SQL(
-        INSERT INTO pressure (epoch_ms, vehicle, sensor, psi)
+        INSERT INTO gps (epoch_ms, lat, lon, alt)
         VALUES (?, ?, ?, ?);
     )SQL";
 
-    inline const char* INSERT_LINEAR_ACTUATOR = R"SQL(
-        INSERT INTO linear_actuator (epoch_ms, vehicle, sensor, displacement)
-        VALUES (?, ?, ?, ?);
+    inline const char* INSERT_BRAKE_PRESSURE = R"SQL(
+        INSERT INTO pressure (epoch_ms, front, rear)
+        VALUES (?, ?, ?);
+    )SQL";
+
+    inline const char* INSERT_DISPLACEMENT_SENSORS = R"SQL(
+        INSERT INTO shock_displacement (epoch_ms, front_left, front_right, rear_left, rear_right)
+        VALUES (?, ?, ?, ?, ?);
     )SQL";
 
     inline const char* INSERT_TEMPERATURE = R"SQL(
-        INSERT INTO temperature (epoch_ms, vehicle, sensor, temp)
-        VALUES (?, ?, ?, ?);
+        INSERT INTO temperature (epoch_ms, cvt_temp)
+        VALUES (?, ?);
     )SQL";
 
-    inline const char* INSERT_TACHOMETER = R"SQL(
-        INSERT INTO tachometer (epoch_ms, vehicle, sensor, rpm)
+    inline const char* INSERT_ENGINE_TACHOMETER = R"SQL(
+        INSERT INTO engine_tachometer (epoch_ms, rpm)
+        VALUES (?, ?);
+    )SQL";
+
+    inline const char* INSERT_WHEEL_SPEED = R"SQL(
+        INSERT INTO wheel_speed (epoch_ms, front_left, front_right, rear)
         VALUES (?, ?, ?, ?);
     )SQL";
 
     inline const char* INSERT_VEHICLE_STATE = R"SQL(
-        INSERT INTO vehicle_state (epoch_ms, vehicle, speed, dist)
-        VALUES (?, ?, ?, ?);
+        INSERT INTO vehicle_state (epoch_ms, speed, dist)
+        VALUES (?, ?, ?);
     )SQL";
 
 }

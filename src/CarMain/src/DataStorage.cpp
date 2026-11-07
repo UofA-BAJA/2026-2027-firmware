@@ -12,16 +12,32 @@ namespace BajaWildcatRacing
         std::cout << "Data Storage initialized" << std::endl;
     }
 
-
+    /*
+    *  Method:  updateDatabase (private)
+    *
+    *  Purpose: Writes out buffered SQL commands to the database
+    *
+    *  Pre-Condition: Database is already setup via `setupDatabase()`
+    *
+    *  Post-Condition: locked in an infinite loop until `running` is set to false
+    *
+    *  Parameters:
+    *           None
+    *
+    *  Returns: None
+    *
+    */
     void DataStorage::updateDatabase(){
 
         char* messageError;
         int exit;
 
+        //While datastorage is still running (this allows for graceful termination)
         while(running.load()){
 
             std::unique_lock<std::mutex> lock(insertBufferMutex);
 
+            //switch the queues so that we don't hog the mutex forever
             std::queue<sqlite3_stmt *> localInsertBuffer;
             std::swap(localInsertBuffer, insertBuffer);
             lock.unlock();
@@ -29,7 +45,7 @@ namespace BajaWildcatRacing
 
             sqlite3_exec(db, "BEGIN TRANSACTION", NULL, NULL, &messageError);
 
-
+            //Iterate through all pending statements and execute them
             while(!localInsertBuffer.empty()){
 
                 sqlite3_stmt *statement = localInsertBuffer.front();
@@ -52,7 +68,6 @@ namespace BajaWildcatRacing
     }
 
 
-
     void DataStorage::end(){
         running = false;
 
@@ -64,15 +79,20 @@ namespace BajaWildcatRacing
 
     }
 
-
-    int DataStorage::getData(){
-        std::cout << "Shame on you for calling getData()" << std::endl;
-        return 1;       // Always error
-    }
-
-
-    // statement must be a prepared statement!!!!
-    // It can not be null!
+    /*
+    *  Method:  queueSqlStatement (private)
+    *
+    *  Purpose: Enqueues the given sqlite3 statement to be stored in the database.
+    *
+    *  Pre-Condition: 
+    *
+    *  Post-Condition: Statement is queued and will be stored eventually.
+    *
+    *  @param statement    an sqlite3_stmt pointer (NOT NULL)
+    *
+    *  @returns None
+    *
+    */
     void DataStorage::queueSqlStatement(sqlite3_stmt *statement){
 
         if(statement == nullptr){
@@ -86,7 +106,20 @@ namespace BajaWildcatRacing
         insertBuffer.push(statement);
     }
 
-    
+    /*
+    *  Method:  setupDatabase (private)
+    *
+    *  Purpose: Sets up the database file, tables, and any initial values. Does not retry if it fails.
+    *
+    *  Pre-Condition: 
+    *
+    *  Post-Condition: Database is setup unless some weird I/O error occurs (check the console)
+    *
+    *  @param path    ABSOLUTE path to a folder which the database will be stored in
+    *
+    *  @returns None
+    *
+    */
     void DataStorage::setupDatabase(const char* path){
 
 
@@ -125,37 +158,31 @@ namespace BajaWildcatRacing
         }
     }
 
+    /**
+     * Note: storeData() is overridden for each data type listed in DataTypes.h
+     */
+
     
     void DataStorage::storeData(ShockDisplacement data){
-
-        storeLinearActuator("LA_FR", 5, data.frontRight);
-        storeLinearActuator("LA_FL", 5, data.frontLeft);
-        storeLinearActuator("LA_RR", 5, data.rearRight);
-        storeLinearActuator("LA_RL", 5, data.rearLeft);
-    }
-
-    void DataStorage::storeLinearActuator(const char* sensor, int sensor_len, float displacement){
         sqlite3_stmt *statement;
         
-        int exit = sqlite3_prepare_v2(db, INSERT_LINEAR_ACTUATOR, -1, &statement, nullptr);
+        int exit = sqlite3_prepare_v2(db, INSERT_DISPLACEMENT_SENSORS, -1, &statement, nullptr);
         
         if(exit){
             std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
             return;
         }
         // Bind values to parameters
-        sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, sensor, sensor_len, NULL);
-        sqlite3_bind_double(statement, 4, displacement);
-
+        sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch()); 
+        sqlite3_bind_double(statement, 2, data.frontLeft);
+        sqlite3_bind_double(statement, 3, data.frontRight);
+        sqlite3_bind_double(statement, 4, data.rearLeft);
+        sqlite3_bind_double(statement, 5, data.rearRight);
 
         queueSqlStatement(statement);
-
     }
     
     void DataStorage::storeData(RotationXYZ rotData, AccelerationXYZ accData){
-        
         sqlite3_stmt *statement;
         
         int exit = sqlite3_prepare_v2(db, INSERT_IMU, -1, &statement, nullptr);
@@ -166,29 +193,21 @@ namespace BajaWildcatRacing
         }
         // Bind values to parameters
         sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, "IMU", 3, NULL);
-        sqlite3_bind_double(statement, 4, accData.accelerationx);
-        sqlite3_bind_double(statement, 5, accData.accelerationy);
-        sqlite3_bind_double(statement, 6, accData.accelerationz);
-        sqlite3_bind_double(statement, 7, rotData.rotationx);
-        sqlite3_bind_double(statement, 8, rotData.rotationy);
-        sqlite3_bind_double(statement, 9, rotData.rotationz);
+        sqlite3_bind_double(statement, 2, accData.accelerationx);
+        sqlite3_bind_double(statement, 3, accData.accelerationy);
+        sqlite3_bind_double(statement, 4, accData.accelerationz);
+        sqlite3_bind_double(statement, 5, rotData.rotationx);
+        sqlite3_bind_double(statement, 6, rotData.rotationy);
+        sqlite3_bind_double(statement, 7, rotData.rotationz);
 
 
         queueSqlStatement(statement);
     }
 
     void DataStorage::storeData(BrakePressure data){
-
-        storeBrakePressure("BP_F", 4, data.front);
-        storeBrakePressure("BP_R", 4, data.rear);
-    }
-
-    void DataStorage::storeBrakePressure(const char* sensor, int sensor_len, float psi){
         sqlite3_stmt *statement;
         
-        int exit = sqlite3_prepare_v2(db, INSERT_PRESSURE, -1, &statement, nullptr);
+        int exit = sqlite3_prepare_v2(db, INSERT_BRAKE_PRESSURE, -1, &statement, nullptr);
         
         if(exit){
             std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
@@ -196,29 +215,17 @@ namespace BajaWildcatRacing
         }
 
         // Bind values to parameters
-        sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, sensor, sensor_len, NULL);
-        sqlite3_bind_double(statement, 4, psi);
+        sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());
+        sqlite3_bind_double(statement, 2, data.front);
+        sqlite3_bind_double(statement, 3, data.rear);
 
         queueSqlStatement(statement);
     }
 
     void DataStorage::storeData(WheelSpeed data){
-        storeTachometer("Sped_FR", 7, data.frontRight);
-        storeTachometer("Sped_FL", 7, data.frontLeft);
-        storeTachometer("Sped_R", 6, data.rear);
-    }
-
-    void DataStorage::storeData(EngineRPM data){
-        storeTachometer("Engine_Tach", 11, data.rpm);
-    }
-
-    void DataStorage::storeTachometer(const char* sensor, int sensor_len, float rpm){
-        
         sqlite3_stmt *statement;
         
-        int exit = sqlite3_prepare_v2(db, INSERT_TACHOMETER, -1, &statement, nullptr);
+        int exit = sqlite3_prepare_v2(db, INSERT_WHEEL_SPEED, -1, &statement, nullptr);
         
         if(exit){
             std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
@@ -227,9 +234,26 @@ namespace BajaWildcatRacing
 
         // Bind values to parameters
         sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, sensor, sensor_len, NULL);
-        sqlite3_bind_double(statement, 4, rpm);
+        sqlite3_bind_double(statement, 2, data.frontLeft);
+        sqlite3_bind_double(statement, 3, data.frontRight);
+        sqlite3_bind_double(statement, 4, data.rear);
+
+        queueSqlStatement(statement);
+    }
+
+    void DataStorage::storeData(EngineRPM data){
+        sqlite3_stmt *statement;
+        
+        int exit = sqlite3_prepare_v2(db, INSERT_ENGINE_TACHOMETER, -1, &statement, nullptr);
+        
+        if(exit){
+            std::cerr << "Can't open database: " << sqlite3_errmsg(db) << std::endl;
+            return;
+        }
+
+        // Bind values to parameters
+        sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
+        sqlite3_bind_double(statement, 2, data.rpm);
 
         queueSqlStatement(statement);
     }
@@ -245,9 +269,7 @@ namespace BajaWildcatRacing
         }
         // Bind values to parameters
         sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, "CVT_Temp", 8, NULL);
-        sqlite3_bind_double(statement, 4, data.temp);
+        sqlite3_bind_double(statement, 2, data.temp);
 
         queueSqlStatement(statement);
     }
@@ -263,10 +285,8 @@ namespace BajaWildcatRacing
         }
         // Bind values to parameters
         sqlite3_bind_int64(statement, 1, CarTime::getUnixEpoch());      // TODO: Need unix epoch somehow
-        sqlite3_bind_text(statement, 2, VEHICLE_NAME, strlen(VEHICLE_NAME), NULL);
-        sqlite3_bind_text(statement, 3, "GPS", 3, NULL);
-        sqlite3_bind_double(statement, 4, data.latitude);
-        sqlite3_bind_double(statement, 4, data.longitude);
+        sqlite3_bind_double(statement, 2, data.latitude);
+        sqlite3_bind_double(statement, 3, data.longitude);
         sqlite3_bind_double(statement, 4, data.atltitude);
 
         queueSqlStatement(statement);
