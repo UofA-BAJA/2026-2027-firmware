@@ -58,7 +58,7 @@ namespace BajaWildcatRacing
     *
     */
     Car::Car() 
-    : dataStorage(dataStoragePath)
+    : dataStorage()
     , procedureScheduler()
     , canDispatcher(canInterface)
     , coms(procedureScheduler)
@@ -71,9 +71,8 @@ namespace BajaWildcatRacing
         std::signal(SIGTERM, signal_handler);
 
         // Init behavior that needs to be called before the subsystems start running.
-        init();
-
-        CarLogger::Initialize(logPath);
+        // This starts up the database, car logger
+        init(); 
 
         procedureScheduler.receiveComCommand(Command::DEFAULT_CAR_START);
 
@@ -193,7 +192,41 @@ namespace BajaWildcatRacing
     *
     */
     void Car::init(){
-        // std::cout << "Car Sucessfully Initialized\n";
+        CarLogger::Initialize(logPath);
+
+        //chat assisted yay - check if the USB is mounted
+        std::string s(dataStorageUSBPath);
+        bool found = false;
+
+        //get a stream to read the list of active mounts
+        std::ifstream mounts("/proc/self/mounts");
+        
+        //read each line one by one
+        std::string line, device, mountPoint;
+        while(std::getline(mounts, line)){
+            //get a string stream to get each word one by one (separated by whitespace)
+            std::istringstream iss(line);
+
+        
+            //continue if we don't extract the first two chunks of data (i.e. incomplete line)
+            if(!(iss >> device >> mountPoint)){
+                continue;
+            }
+
+            if(mountPoint == s){
+                found = true;
+                break;
+            }
+        }
+
+        if(found){
+            dataStorage.setStoragePath(dataStorageUSBPath);
+        }else{
+            std::cout << "WARNING: data storage couldn't find the mounted USB. Saving to SD card." << std::endl;
+            dataStorage.setStoragePath(dataStorageInternalPath);
+        }
+
+        dataStorage.start();
     }
 
     /*

@@ -36,7 +36,13 @@ namespace BajaWildcatRacing
             static void signal_handler(int signal_num);
 
             const char* canInterface = "can0";
-            const char* dataStoragePath = "/home/bajaelectrical/DataStorage";
+
+            //USB path is the location where the USB drive is supposed to be mounted
+            //If it is not detected at that mount location, it falls back Internal path (on the SD card)
+            const char* dataStorageUSBPath = "/home/bajaelectrical/DataStorage/MountPoint";
+            const char* dataStorageInternalPath = "/home/bajaelectrical/DataStorage";
+
+
             const char* logPath = "/home/bajaelectrical/car.log";
 
 
@@ -44,6 +50,7 @@ namespace BajaWildcatRacing
             // c++ initializes members in the order they're declared in the class, not in the order they are listed
             // in the initialization list! It's very important that the order stays this way, or maybe I should make
             // it so that the constructors aren't dependent on any of the objects here
+            
             DataStorage dataStorage;
             ProcedureScheduler procedureScheduler;
             CANDispatcher canDispatcher;            

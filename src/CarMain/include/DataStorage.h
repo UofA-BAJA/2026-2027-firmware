@@ -9,7 +9,7 @@
 
 #include <sqlite3.h>
 #include <iostream>
-#include <string.h>
+#include <string>
 #include <queue>
 
 #include <mutex>
@@ -30,11 +30,11 @@ namespace BajaWildcatRacing
 
     class DataStorage {
         public:
-            DataStorage(const char* path);
+            DataStorage();
+            void start();
             void end();
 
-            void insertCar(std::string name, int competitionYear);
-            void insertSensor(std::string name, std::string manufacturer, std::string model, std::string sensorType, std::string description);
+            void setStoragePath(const char* path);
 
             void storeData(ShockDisplacement data);
             void storeData(RotationXYZ rotData, AccelerationXYZ accData);
@@ -57,10 +57,15 @@ namespace BajaWildcatRacing
             std::thread updateDBThread;
             std::atomic<bool> running = true;
 
+            //path to storage location
+            std::string storagePath;
+            
+
 
             void queueSqlStatement(sqlite3_stmt *statement);
 
             void setupDatabase(const char* path);
+            char* getFilepath();
             void updateDatabase();
 
     };

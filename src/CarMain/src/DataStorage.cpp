@@ -3,14 +3,88 @@
 namespace BajaWildcatRacing
 {
 
-    DataStorage::DataStorage(const char* path)
+    DataStorage::DataStorage()
     {
-        setupDatabase(path);
+        std::cout << "Data Storage constructed" << std::endl;
+    }
+
+    void DataStorage::setStoragePath(const char* path){
+        storagePath = path;
+    }
+
+  
+    void DataStorage::start(){
+        setupDatabase(storagePath.c_str());
 
         updateDBThread = std::thread(&DataStorage::updateDatabase, this);
 
-        std::cout << "Data Storage initialized" << std::endl;
+        std::cout << "Data Storage started" << std::endl;
     }
+
+    void DataStorage::end(){
+        running = false;
+
+        if (updateDBThread.joinable()) {
+            updateDBThread.join();  // Wait for the thread to finish
+        }
+
+        sqlite3_close(db);
+
+    }
+
+
+    /*
+    *  Method:  setupDatabase (private)
+    *
+    *  Purpose: Sets up the database file, tables, and any initial values. Does not retry if it fails.
+    *
+    *  Pre-Condition: 
+    *
+    *  Post-Condition: Database is setup unless some weird I/O error occurs (check the console)
+    *
+    *  @param path    ABSOLUTE path to a folder which the database will be stored in
+    *
+    *  @returns None
+    *
+    */
+    void DataStorage::setupDatabase(const char* path){
+
+
+        // Create new .db file with the current time in the name
+
+        auto now = std::chrono::system_clock::now();
+        // Format: Year-Month-Day_Hour-Minute-Second
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&t), "%Y-%m-%d_%H-%M-%S");
+        std::string timestamp = ss.str();
+        
+        std::string fullPath = std::string(path) + "/baja_data_" + timestamp +".db";
+
+        int exit = 0;
+        // If database does not already exist, it will be created.
+        exit = sqlite3_open(fullPath.c_str(), &db);
+
+        if (exit) { 
+            std::cerr << "Error open DB: " << sqlite3_errmsg(db) << std::endl; 
+            return;
+        } 
+        else
+        {
+            // std::cout << "Opened Database Successfully!" << std::endl; 
+        }
+        
+
+        // Execute database schema
+        char* errMsg = nullptr;
+        int rc = sqlite3_exec(db, DATABASE_SCHEMA, nullptr, nullptr, &errMsg);
+        if(rc != SQLITE_OK){
+            std::cerr << "SQL error: " << errMsg << std::endl;
+            sqlite3_free(errMsg);
+        }
+    }
+
 
     /*
     *  Method:  updateDatabase (private)
@@ -68,17 +142,6 @@ namespace BajaWildcatRacing
     }
 
 
-    void DataStorage::end(){
-        running = false;
-
-        if (updateDBThread.joinable()) {
-            updateDBThread.join();  // Wait for the thread to finish
-        }
-
-        sqlite3_close(db);
-
-    }
-
     /*
     *  Method:  queueSqlStatement (private)
     *
@@ -104,58 +167,6 @@ namespace BajaWildcatRacing
 
         std::lock_guard<std::mutex> lock (insertBufferMutex);
         insertBuffer.push(statement);
-    }
-
-    /*
-    *  Method:  setupDatabase (private)
-    *
-    *  Purpose: Sets up the database file, tables, and any initial values. Does not retry if it fails.
-    *
-    *  Pre-Condition: 
-    *
-    *  Post-Condition: Database is setup unless some weird I/O error occurs (check the console)
-    *
-    *  @param path    ABSOLUTE path to a folder which the database will be stored in
-    *
-    *  @returns None
-    *
-    */
-    void DataStorage::setupDatabase(const char* path){
-
-
-        // Create new .db file with the current time in the name
-
-        auto now = std::chrono::system_clock::now();
-        // Format: Year-Month-Day_Hour-Minute-Second
-        std::time_t t = std::chrono::system_clock::to_time_t(now);
-
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&t), "%Y-%m-%d_%H-%M-%S");
-        std::string timestamp = ss.str();
-        
-        std::string fullPath = std::string(path) + "/baja_data_" + timestamp +".db";
-
-        int exit = 0;
-        // If database does not already exist, it will be created.
-        exit = sqlite3_open(fullPath.c_str(), &db);
-
-        if (exit) { 
-            std::cerr << "Error open DB: " << sqlite3_errmsg(db) << std::endl; 
-            return;
-        } 
-        else
-        {
-            // std::cout << "Opened Database Successfully!" << std::endl; 
-        }
-        
-
-        // Execute database schema
-        char* errMsg = nullptr;
-        int rc = sqlite3_exec(db, DATABASE_SCHEMA, nullptr, nullptr, &errMsg);
-        if(rc != SQLITE_OK){
-            std::cerr << "SQL error: " << errMsg << std::endl;
-            sqlite3_free(errMsg);
-        }
     }
 
     /**
