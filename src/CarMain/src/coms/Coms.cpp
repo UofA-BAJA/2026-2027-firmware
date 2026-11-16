@@ -15,9 +15,10 @@ comments
 
 namespace BajaWildcatRacing {
 
-    Coms::Coms(ProcedureScheduler& procedureScheduler)
+    Coms::Coms(ProcedureScheduler& procedureScheduler, DataStorage& dataStorage)
     :rf95(RADIO_CS_PIN, RADIO_INT_PIN)
-    ,procedureScheduler(procedureScheduler) {
+    ,procedureScheduler(procedureScheduler)
+    ,dataStorage(dataStorage) {
 
         std::fill(dataTypeMask, dataTypeMask+32, 0xFF);
         radioThread = std::thread(&Coms::executeRadio, this);
@@ -47,6 +48,7 @@ namespace BajaWildcatRacing {
             return;
         }
 
+        //Set frequency, set max output power, set the same modem config as the pit
         rf95.setFrequency(915.0);
         rf95.setTxPower(23, false); //Selects maximum power for the LoRa module
         rf95.setModemConfig(RH_RF95::Bw500Cr45Sf128); //Selects maximum bitrate 
@@ -65,6 +67,7 @@ namespace BajaWildcatRacing {
 
         std::chrono::steady_clock::time_point lastRxTime = std::chrono::steady_clock::now();
 
+        //Main loop
         while(running){
             startTime = std::chrono::steady_clock::now();
 
@@ -252,7 +255,8 @@ namespace BajaWildcatRacing {
                 }else{
                     //Actual command recieved
                     for(int i = 0; i < rxLength; i++){
-                        if(rxBuffer[i] == 0){
+                        Command c = (Commmand)rxBuffer[i];
+                        if(c == Command::RADIO_FREQUENCY_CHANGE){
                             //Change frequency 
                             i++;
                             if(rxLength - i < 4){
@@ -265,7 +269,7 @@ namespace BajaWildcatRacing {
                             memcpy(&currentFrequency, rxBuffer, 4);
                             i += 3; //don't want to skip over the end, only skip 3 places
                             // std::cout << "recieved frequency command: " << std::endl;
-                        }else if(rxBuffer[i] == 1){
+                        }else if(c == Command::RADIO_DATA_CHANGE){
                             //Change commands
                             i++;
                             if(rxLength - i < 32){
@@ -277,11 +281,29 @@ namespace BajaWildcatRacing {
                         
                             memcpy(dataTypeMask, rxBuffer, 32);
                             i += 31; //don't want to skip over the end, only skip 31 places
+                        }else if(c == Command::END_LOG){
+                            //End log: stop data logger, and stop logging procedures
+                            dataStorage.end();
+                            procedureScheduler.receiveComCommand(c);
+                        }else if(c == Command::START_LOG){
+                            //Start log: start data logger, and start logging procedures. Also get input string
+                            i++;
+                            uint8_t dbTitleLen = rxBuffer[i];
+
+                            //If we recieved not enough for the title, start anyway but don't name.
+                            if(rxLength - i < dbTitleLen){
+                                dataStorage.start();
+                            }else{
+                                
+                            }
+
+                            //Still run the procedure scheduler start
+                            procedureScheduler.receiveComCommand(c);
                         }else{
                             //Non-special command
                             // i++;
                             // std::cout << "proc scheduler command recieved" << std::endl;
-                            procedureScheduler.receiveComCommand((Command)rxBuffer[i]);
+                            procedureScheduler.receiveComCommand(c);
                         }
                     }
                     rf95.setModeIdle();

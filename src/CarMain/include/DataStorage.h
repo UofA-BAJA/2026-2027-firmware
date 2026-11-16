@@ -32,6 +32,7 @@ namespace BajaWildcatRacing
         public:
             DataStorage();
             void start();
+            void start(std::string name);
             void end();
 
             void setStoragePath(const char* path);
@@ -55,17 +56,16 @@ namespace BajaWildcatRacing
             std::queue<sqlite3_stmt *> insertBuffer;
 
             std::thread updateDBThread;
-            std::atomic<bool> running = true;
+            std::atomic<bool> running = false;
 
             //path to storage location
             std::string storagePath;
-            
+            std::string fileName;
 
 
             void queueSqlStatement(sqlite3_stmt *statement);
 
-            void setupDatabase(const char* path);
-            char* getFilepath();
+            void setupDatabase();
             void updateDatabase();
 
     };

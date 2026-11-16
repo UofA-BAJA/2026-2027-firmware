@@ -5,6 +5,7 @@
 #include "Commands.h"
 #include "ProcedureScheduler.h"
 #include "CarLogger.h"
+#include "DataStorage.h"
 
 #include "Commands.h"
 #include "Constants.h"
@@ -42,7 +43,7 @@ namespace BajaWildcatRacing
 
 
         public:
-            Coms(ProcedureScheduler& procedureScheduler);
+            Coms(ProcedureScheduler& procedureScheduler, DataStorage& dataStorage);
 
 
             void execute(float timestamp);
@@ -65,18 +66,19 @@ namespace BajaWildcatRacing
             // and defeat the purpose of multithreading
             RH_RF95 rf95;
 
-            
-            
+            //Disable the radio thread entirely by setting to false
             const bool RADIO_ACTIVE = true;
 
-            int currentFrequency = 10;
+            //Current send frequency of radio
+            int currentFrequency = 15;
+            //True if the last cycle time was longer than 1/frequency
             bool overloaded = false;
-
+            
             PitCommandState currentPitCommandState = PitCommandState::LIVE_DATA_TRANSMIT;
 
             std::atomic<float> currTimestamp = 0;
             void executeRadio(); //Ran in a new thread to run the radio
-            void radioTransmit(byte data[], byte sentDataLength, bool rxSwitchFlag); //Helper function for transmitLiveData()
+            void radioTransmit(byte data[], byte sentDataLength, bool rxSwitchFlag); //Helper function for transmitLiveData() (transmits data[])
 
             //States------
             void transmitLiveData(); 
@@ -85,9 +87,11 @@ namespace BajaWildcatRacing
             //------------
         
 
-
+            //References to things that can be changed by the radio commands
             ProcedureScheduler& procedureScheduler;
+            DataStorage& dataStorage;
 
+            //Struct for a queued outbound data frame
             typedef struct DataFrame_s{
                 byte id;
                 float timestamp;
@@ -108,7 +112,7 @@ namespace BajaWildcatRacing
             std::thread radioThread;
             bool running = RADIO_ACTIVE;
 
-            //RX Command stuff
+            //Recieve Command stuff
             bool rxSuccessful = false;
             bool switchToRX = false;
             const int64_t RX_SWITCH_INTERVAL = 2 * 1000000000L; //seconds to nanoseconds

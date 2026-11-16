@@ -61,7 +61,7 @@ namespace BajaWildcatRacing
     : dataStorage()
     , procedureScheduler()
     , canDispatcher(canInterface)
-    , coms(procedureScheduler)
+    , coms(procedureScheduler, dataStorage)
     , carContainer(procedureScheduler, canDispatcher, dataStorage, coms)
 
     {

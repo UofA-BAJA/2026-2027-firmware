@@ -12,13 +12,33 @@ namespace BajaWildcatRacing
         storagePath = path;
     }
 
-  
+    //no file name specified - use default
     void DataStorage::start(){
-        setupDatabase(storagePath.c_str());
+        auto now = std::chrono::system_clock::now();
+        // Format: Year-Month-Day_Hour-Minute-Second
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
 
-        updateDBThread = std::thread(&DataStorage::updateDatabase, this);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&t), "%Y-%m-%d_%H-%M-%S");
+        std::string name = "baja_data_" + ss.str();
+        
+        start(name);
+    }
+  
+    //specified filename
+    void DataStorage::start(std::string name){
+        //don't start again if we already started
+        if(!running.load()){
+            fileName = name;
 
-        std::cout << "Data Storage started" << std::endl;
+            setupDatabase();
+            
+            running = true;
+
+            updateDBThread = std::thread(&DataStorage::updateDatabase, this);
+
+            std::cout << "Data Storage started" << std::endl;
+        }
     }
 
     void DataStorage::end(){
@@ -47,20 +67,9 @@ namespace BajaWildcatRacing
     *  @returns None
     *
     */
-    void DataStorage::setupDatabase(const char* path){
+    void DataStorage::setupDatabase(){
 
-
-        // Create new .db file with the current time in the name
-
-        auto now = std::chrono::system_clock::now();
-        // Format: Year-Month-Day_Hour-Minute-Second
-        std::time_t t = std::chrono::system_clock::to_time_t(now);
-
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&t), "%Y-%m-%d_%H-%M-%S");
-        std::string timestamp = ss.str();
-        
-        std::string fullPath = std::string(path) + "/baja_data_" + timestamp +".db";
+        std::string fullPath = storagePath + fileName + ".db";
 
         int exit = 0;
         // If database does not already exist, it will be created.
@@ -160,6 +169,9 @@ namespace BajaWildcatRacing
 
         if(statement == nullptr){
             // literally the end of the world
+            return;
+        }else if(!running.load()){
+            //don't queue stuff if we aren't in running mode
             return;
         }
 

@@ -11,6 +11,7 @@ enum Command{
     RADIO_DATA_CHANGE = 1,          // Reserved for changing which data is being sent via radio
 
     DEFAULT_CAR_START = 2,          // Default command recieved when car starts (currently starts everything)
+    
     START_LOG = 100,                // Starts recording data and realtime transmission
     END_LOG = 101,                  // Stops recording data and realtime transmission
 
