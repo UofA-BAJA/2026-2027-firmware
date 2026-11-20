@@ -42,6 +42,7 @@ namespace BajaWildcatRacing
     }
 
     void DataStorage::end(){
+        std::cout << "Data storage stopping" << std::endl;
         running = false;
 
         if (updateDBThread.joinable()) {
@@ -49,7 +50,7 @@ namespace BajaWildcatRacing
         }
 
         sqlite3_close(db);
-
+        std::cout << "Data storage stopped." << std::endl;
     }
 
 

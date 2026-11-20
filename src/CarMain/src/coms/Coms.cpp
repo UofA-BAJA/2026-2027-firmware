@@ -34,8 +34,15 @@ namespace BajaWildcatRacing {
     }
 
     void Coms::end(){
-        running = false;
         std::cout << "Coms are stopping..." << std::endl;
+        running = false;
+
+        if (radioThread.joinable()) {
+            radioThread.join();  // Wait for the thread to finish
+        }
+
+        std::cout << "Coms stopped." << std::endl;
+        
     }
 
     void Coms::executeRadio(){
@@ -290,11 +297,21 @@ namespace BajaWildcatRacing {
                             i++;
                             uint8_t dbTitleLen = rxBuffer[i];
 
-                            //If we recieved not enough for the title, start anyway but don't name.
+                            
+                            //TODO: have a condition for max length
                             if(rxLength - i < dbTitleLen){
+                                //If we recieved not enough for the title, start anyway but don't name.
                                 dataStorage.start();
+                                std::cerr << "Error: recieved too short of a frame for data storage start" << std::endl;
+                                rf95.setModeIdle();
+                                return;
                             }else{
-                                
+                                //copy out name buffer
+                                char* nameBuffer[dbTitleLen];
+                                memcpy(nameBuffer, rxBuffer, dbTitleLen);
+                                dataStorage.start(std::string(nameBuffer)); 
+
+                                i += dbTitleLen - 1; //don't want to skip over the end
                             }
 
                             //Still run the procedure scheduler start
