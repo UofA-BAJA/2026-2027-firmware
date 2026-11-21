@@ -262,15 +262,15 @@ namespace BajaWildcatRacing {
                 }else{
                     //Actual command recieved
                     for(int i = 0; i < rxLength; i++){
-                        Command c = (Commmand)rxBuffer[i];
+                        Command c = (Command)rxBuffer[i];
+
                         if(c == Command::RADIO_FREQUENCY_CHANGE){
                             //Change frequency 
                             i++;
                             if(rxLength - i < 4){
                                 //Not enough i's left 
                                 std::cerr << "Error: recieved too short of a frame for the frequency change command" << std::endl;
-                                rf95.setModeIdle();
-                                return;
+                                break;
                             }
                         
                             memcpy(&currentFrequency, rxBuffer, 4);
@@ -282,8 +282,7 @@ namespace BajaWildcatRacing {
                             if(rxLength - i < 32){
                                 //Not enough i's left 
                                 std::cerr << "Error: recieved too short of a frame for the data change command" << std::endl;
-                                rf95.setModeIdle();
-                                return;
+                                break;
                             }
                         
                             memcpy(dataTypeMask, rxBuffer, 32);
@@ -295,21 +294,35 @@ namespace BajaWildcatRacing {
                         }else if(c == Command::START_LOG){
                             //Start log: start data logger, and start logging procedures. Also get input string
                             i++;
+
+                            //avoid segfault
+                            if(i >= rxLength){
+                                //start anyway but don't name
+                                dataStorage.start();
+                                std::cerr << "Error: didn't get the database title length" << std::endl;
+                                break;
+                            }
+
                             uint8_t dbTitleLen = rxBuffer[i];
 
-                            
-                            //TODO: have a condition for max length
+                            i++;
+                            //TODO: have a condition for max length (is it too long?)
                             if(rxLength - i < dbTitleLen){
                                 //If we recieved not enough for the title, start anyway but don't name.
                                 dataStorage.start();
                                 std::cerr << "Error: recieved too short of a frame for data storage start" << std::endl;
-                                rf95.setModeIdle();
-                                return;
+                                break;
                             }else{
+                                
                                 //copy out name buffer
-                                char* nameBuffer[dbTitleLen];
-                                memcpy(nameBuffer, rxBuffer, dbTitleLen);
-                                dataStorage.start(std::string(nameBuffer)); 
+                                //TODO: validate letters
+                                char nameBuffer[dbTitleLen];
+                                memcpy(nameBuffer, rxBuffer+i, dbTitleLen);
+                                
+                                //convert to C++ string
+                                std::string cpp_str(nameBuffer, dbTitleLen);
+                                
+                                dataStorage.start(cpp_str); 
 
                                 i += dbTitleLen - 1; //don't want to skip over the end
                             }
@@ -323,6 +336,8 @@ namespace BajaWildcatRacing {
                             procedureScheduler.receiveComCommand(c);
                         }
                     }
+
+                    //TODO: have a different flag for "hey we got it but it was maformed"
                     rf95.setModeIdle();
                     rxSuccessful = true;
                 }

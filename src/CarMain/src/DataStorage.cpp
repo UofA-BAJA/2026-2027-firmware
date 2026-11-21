@@ -24,7 +24,7 @@ namespace BajaWildcatRacing
         
         start(name);
     }
-  
+
     //specified filename
     void DataStorage::start(std::string name){
         //don't start again if we already started
@@ -70,7 +70,7 @@ namespace BajaWildcatRacing
     */
     void DataStorage::setupDatabase(){
 
-        std::string fullPath = storagePath + fileName + ".db";
+        std::string fullPath = storagePath + "/" + fileName + ".db";
 
         int exit = 0;
         // If database does not already exist, it will be created.
