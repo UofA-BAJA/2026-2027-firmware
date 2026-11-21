@@ -14,6 +14,7 @@
 //Standard Includes
 #include <iostream>
 #include <queue>
+#include <regex>
 
 // For multithreading
 #include <mutex>

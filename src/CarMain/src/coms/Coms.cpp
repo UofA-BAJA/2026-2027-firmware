@@ -328,12 +328,20 @@ namespace BajaWildcatRacing {
                                 char nameBuffer[dbTitleLen];
                                 memcpy(nameBuffer, rxBuffer+i, dbTitleLen);
 
-                                //validate
-                                
+                            
                                 //convert to C++ string
                                 std::string cpp_str(nameBuffer, dbTitleLen);
-                                
-                                dataStorage.start(cpp_str); 
+
+                                //validate
+                                //allow letters, numbers, (underscore) (dash) (!) (space) (parenthesis)
+                                std::regex pattern("^[a-zA-Z0-9 _\\- !\\(\\)]{1,150}$");
+                                if(std::regex_match(cpp_str, pattern)){
+                                    dataStorage.start(cpp_str); 
+                                }else{
+                                    std::cerr << "Invalid filename recieved." << std::endl;
+                                    dataStorage.start();
+                                    rxMalformed = true;
+                                }
 
                                 i += dbTitleLen - 1; //don't want to skip over the end
                             }
