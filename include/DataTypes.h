@@ -5,8 +5,6 @@
 // The hex code associated with the data type
 
 // This code will be used by both the pit side and the car side
-// It is also the code that will serve as the "smift amount" for the mask value,
-// as described in the live data packet protocol 
 enum DataType{
     //oops what happened to zero???
     WHEEL_RPM = 0x01,
@@ -18,6 +16,7 @@ enum DataType{
     SHOCK_DISPLACEMENT = 0x07,
     CVT_TEMPERATURE = 0x08,
     GPS_POSITION = 0x9,
+    BRAKE_BIAS = 0xA,
 
     //...
     ERRORS = 0xAA,

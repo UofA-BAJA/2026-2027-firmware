@@ -176,6 +176,7 @@ namespace BajaWildcatRacing {
         if(switchToRX){
             currentPitCommandState = PitCommandState::WAIT_COMMAND_RECIEVE;
             rxSuccessful = false;
+            rxMalformed = false;
         }
         //Send final packet if there's actually data there
         if(sentDataLength > 0){
@@ -230,7 +231,8 @@ namespace BajaWildcatRacing {
         uint8_t switchFlag = (1 & rxSwitchFlag);
         uint8_t rxSuccessFlag = (1 & rxSuccessful) << 1;
         uint8_t overloadFlag = (1 & overloaded) << 2;
-        rf95.setHeaderFlags(switchFlag | rxSuccessFlag | overloadFlag);
+        uint8_t rxMalformedFlag = (1 & rxMalformed) << 3;
+        rf95.setHeaderFlags(switchFlag | rxSuccessFlag | overloadFlag | rxMalformedFlag);
 
 
         // std::cout << "about to send the data" << std::endl;
@@ -270,18 +272,19 @@ namespace BajaWildcatRacing {
                             if(rxLength - i < 4){
                                 //Not enough i's left 
                                 std::cerr << "Error: recieved too short of a frame for the frequency change command" << std::endl;
+                                rxMalformed = true;
                                 break;
                             }
                         
                             memcpy(&currentFrequency, rxBuffer, 4);
                             i += 3; //don't want to skip over the end, only skip 3 places
-                            // std::cout << "recieved frequency command: " << std::endl;
                         }else if(c == Command::RADIO_DATA_CHANGE){
                             //Change commands
                             i++;
                             if(rxLength - i < 32){
                                 //Not enough i's left 
                                 std::cerr << "Error: recieved too short of a frame for the data change command" << std::endl;
+                                rxMalformed = true;
                                 break;
                             }
                         
@@ -300,24 +303,32 @@ namespace BajaWildcatRacing {
                                 //start anyway but don't name
                                 dataStorage.start();
                                 std::cerr << "Error: didn't get the database title length" << std::endl;
+                                rxMalformed = true;
                                 break;
                             }
 
                             uint8_t dbTitleLen = rxBuffer[i];
 
-                            i++;
+                            i++; //increment to start
                             //TODO: have a condition for max length (is it too long?)
                             if(rxLength - i < dbTitleLen){
                                 //If we recieved not enough for the title, start anyway but don't name.
                                 dataStorage.start();
                                 std::cerr << "Error: recieved too short of a frame for data storage start" << std::endl;
+                                rxMalformed = true;
+                                break;
+                            }else if(rxLength > 150){
+                                //Title too long (this is an aribtrary value rn)
+                                dataStorage.start();
+                                std::cerr << "Error: title for data storage start too long" << std::endl;
+                                rxMalformed = true;
                                 break;
                             }else{
-                                
                                 //copy out name buffer
-                                //TODO: validate letters
                                 char nameBuffer[dbTitleLen];
                                 memcpy(nameBuffer, rxBuffer+i, dbTitleLen);
+
+                                //validate
                                 
                                 //convert to C++ string
                                 std::string cpp_str(nameBuffer, dbTitleLen);
@@ -329,15 +340,16 @@ namespace BajaWildcatRacing {
 
                             //Still run the procedure scheduler start
                             procedureScheduler.receiveComCommand(c);
+                        }else if(c == Command::SET_BOUNDING_BOX){
+                            //TODO: implement
+                        }else if(c == Command::LAP_INCREMENT){
+                            //TODO: implement 
                         }else{
                             //Non-special command
-                            // i++;
-                            // std::cout << "proc scheduler command recieved" << std::endl;
                             procedureScheduler.receiveComCommand(c);
                         }
                     }
 
-                    //TODO: have a different flag for "hey we got it but it was maformed"
                     rf95.setModeIdle();
                     rxSuccessful = true;
                 }

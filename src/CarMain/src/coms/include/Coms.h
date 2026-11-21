@@ -114,6 +114,7 @@ namespace BajaWildcatRacing
 
             //Recieve Command stuff
             bool rxSuccessful = false;
+            bool rxMalformed = false; //we recieved but it was malformed in some way
             bool switchToRX = false;
             const int64_t RX_SWITCH_INTERVAL = 2 * 1000000000L; //seconds to nanoseconds
 

@@ -14,6 +14,8 @@ enum Command{
     
     START_LOG = 100,                // Starts recording data and realtime transmission
     END_LOG = 101,                  // Stops recording data and realtime transmission
+    SET_BOUNDING_BOX = 102,
+    LAP_INCREMENT = 103,
 
 
     EMERGENCY_STOP = 104,           // Unused at the moment.
